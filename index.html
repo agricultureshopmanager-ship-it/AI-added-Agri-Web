@@ -2605,6 +2605,7 @@ window.addEventListener('hashchange', route);
     if(SESSION){
       await syncDB();
     }
+     if (typeof loadSubscription === 'function') { await loadSubscription(); }
   }catch(e){ console.error('boot', e); }
   await route();
 })();
