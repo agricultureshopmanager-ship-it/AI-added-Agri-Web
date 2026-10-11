@@ -6816,7 +6816,7 @@ a[href^="#/invoice/"]:hover, a[href^="#/customer/"]:hover {
   const SUB_OWNER_NAME = 'Samiran Das'; // shown in UPI app
   // ==================================================================
 
-  // ---------- Build UPI string & QR from OWNER UPI ----------
+   // ---------- Build UPI string & QR from OWNER UPI ----------
   async function buildOwnerUpiQr(amount, note) {
     const params = new URLSearchParams({
       pa: SUB_OWNER_UPI,
@@ -6826,11 +6826,40 @@ a[href^="#/invoice/"]:hover, a[href^="#/customer/"]:hover {
       tn: note || 'Subscription'
     });
     const str = 'upi://pay?' + params.toString();
+    console.log('[SUB-QR] UPI string:', str);
+
     let qr = '';
+    let qrError = '';
+
+    // Check that the library is loaded
+    if (typeof QRCode === 'undefined' && typeof qrcode === 'undefined') {
+      qrError = 'QR library not loaded';
+      console.warn('[SUB-QR]', qrError);
+      return { qr: '', upi: SUB_OWNER_UPI, name: SUB_OWNER_NAME, error: qrError };
+    }
+
+    const lib = (typeof QRCode !== 'undefined') ? QRCode : qrcode;
+
     try {
-      qr = await QRCode.toDataURL(str, { margin: 1, width: 400 });
-    } catch(e) { console.warn('QR gen failed:', e); }
-    return { qr, upi: SUB_OWNER_UPI, name: SUB_OWNER_NAME };
+      // Try the standard promise-based method first
+      qr = await lib.toDataURL(str, { margin: 1, width: 300 });
+      if (!qr || typeof qr !== 'string') throw new Error('Empty QR result');
+      console.log('[SUB-QR] Success via toDataURL');
+    } catch (e1) {
+      console.warn('[SUB-QR] toDataURL failed:', e1.message);
+      // Fallback: use toCanvas + toDataURL on the canvas
+      try {
+        const canvas = document.createElement('canvas');
+        await lib.toCanvas(canvas, str, { margin: 1, width: 300 });
+        qr = canvas.toDataURL('image/png');
+        console.log('[SUB-QR] Success via toCanvas fallback');
+      } catch (e2) {
+        qrError = e2.message || 'QR generation failed';
+        console.error('[SUB-QR] Both methods failed:', e1.message, '|', e2.message);
+      }
+    }
+
+    return { qr, upi: SUB_OWNER_UPI, name: SUB_OWNER_NAME, error: qrError };
   }
 
   // ---------- COMPACT SQUARE CARD ----------
@@ -6937,11 +6966,15 @@ a[href^="#/invoice/"]:hover, a[href^="#/customer/"]:hover {
 
         <div style="display:flex; gap:22px; align-items:flex-start; flex-wrap:wrap;">
           <!-- QR -->
-          <div style="flex:0 0 230px; text-align:center;">
+                   <div style="flex:0 0 230px; text-align:center;">
             <div style="background:#ffffff; padding:14px; border-radius:16px; display:inline-block; box-shadow: 0 8px 24px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.15);">
               ${qr
                 ? `<img src="${qr}" style="width:200px; height:200px; display:block;">`
-                : `<div style="width:200px; height:200px; display:flex; align-items:center; justify-content:center; color:#94a3b8; font-size:12px; background:#f8fafc; border-radius:8px;">QR unavailable</div>`}
+                : `<div style="width:200px; height:200px; display:flex; flex-direction:column; align-items:center; justify-content:center; color:#b91c1c; font-size:11px; background:#fef2f2; border-radius:8px; padding:10px; text-align:center;">
+                     <div style="font-size:22px; margin-bottom:6px;">⚠</div>
+                     <div style="font-weight:600;">QR generation failed</div>
+                     <div style="font-size:9px; margin-top:6px; color:#7f1d1d; word-break:break-word;">Open DevTools (F12) → Console → look for <b>[SUB-QR]</b></div>
+                   </div>`}
             </div>
             <div style="font-size:12px; font-weight:600; color:#86efac; margin-top:10px;">Scan to pay ₹${amount}</div>
             <div style="font-size:10px; color:#64748b; margin-top:2px;">GPay · PhonePe · Paytm · BHIM</div>
