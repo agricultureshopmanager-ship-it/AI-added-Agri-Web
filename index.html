@@ -10,6 +10,7 @@
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.1/dist/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script>if(typeof QRCode==='undefined'){document.write('<scr'+'ipt src="https://unpkg.com/qrcode@1.5.3/build/qrcode.min.js"><\/scr'+'ipt>');}</script>
    <style>
 /* ============================================================
    BASE LAYOUT — Restore structural CSS
@@ -6806,6 +6807,7 @@ a[href^="#/invoice/"]:hover, a[href^="#/customer/"]:hover {
 /* ============================================================
    SUBSCRIPTION CARD + QR MODAL + EXPIRED POPUP
    Owner UPI hardcoded. Invoices still use the shop owner's UPI.
+   Auto-loads QRCode library if missing.
    ============================================================ */
 (function() {
   'use strict';
@@ -6815,13 +6817,65 @@ a[href^="#/invoice/"]:hover, a[href^="#/customer/"]:hover {
   const SUB_OWNER_NAME = 'Samiran Das';
   // ==================================================================
 
+  // ---------- Ensure QRCode library is loaded (self-healing) ----------
+  function ensureQRCodeLoaded() {
+    if (typeof QRCode !== 'undefined' || typeof qrcode !== 'undefined') return Promise.resolve(true);
+
+    console.log('[SUB-QR] QRCode missing — loading dynamically...');
+    const sources = [
+      'https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js',
+      'https://unpkg.com/qrcode@1.5.3/build/qrcode.min.js',
+      'https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js'
+    ];
+
+    return new Promise((resolve) => {
+      let idx = 0;
+      const tryNext = () => {
+        if (typeof QRCode !== 'undefined' || typeof qrcode !== 'undefined') {
+          console.log('[SUB-QR] Library loaded from:', idx > 0 ? sources[idx - 1] : 'already loaded');
+          resolve(true);
+          return;
+        }
+        if (idx >= sources.length) {
+          console.error('[SUB-QR] All CDN sources failed');
+          resolve(false);
+          return;
+        }
+        const s = document.createElement('script');
+        s.src = sources[idx];
+        const current = sources[idx];
+        idx++;
+        s.onload = () => {
+          if (typeof QRCode !== 'undefined' || typeof qrcode !== 'undefined') {
+            console.log('[SUB-QR] Library loaded from:', current);
+            resolve(true);
+          } else {
+            tryNext();
+          }
+        };
+        s.onerror = () => {
+          console.warn('[SUB-QR] Failed to load from:', current);
+          tryNext();
+        };
+        document.head.appendChild(s);
+      };
+      tryNext();
+    });
+  }
+
+  // Kick off the load in the background as soon as this script runs
+  ensureQRCodeLoaded();
+
   // ---------- Build UPI string & QR from OWNER UPI ----------
   async function buildOwnerUpiQr(amount, note) {
+    // Ensure library is ready first
+    await ensureQRCodeLoaded();
+
     // Build UPI string manually to avoid '+' encoding issues
     const amt = Number(amount).toFixed(2);
     const tn = encodeURIComponent((note || 'Subscription').substring(0, 50));
     const pn = encodeURIComponent(SUB_OWNER_NAME);
-    const pa = SUB_OWNER_UPI; // UPI IDs don't need encoding (no special chars)
+    const pa = SUB_OWNER_UPI;
     const str = `upi://pay?pa=${pa}&pn=${pn}&am=${amt}&cu=INR&tn=${tn}`;
     console.log('[SUB-QR] UPI string:', str);
 
@@ -6836,7 +6890,6 @@ a[href^="#/invoice/"]:hover, a[href^="#/customer/"]:hover {
 
     const lib = (typeof QRCode !== 'undefined') ? QRCode : qrcode;
 
-    // Try multiple error correction levels + widths
     const attempts = [
       { margin: 2, width: 300, errorCorrectionLevel: 'L' },
       { margin: 2, width: 300, errorCorrectionLevel: 'M' },
@@ -6860,7 +6913,6 @@ a[href^="#/invoice/"]:hover, a[href^="#/customer/"]:hover {
       }
     }
 
-    // Final fallback: canvas method
     if (!qr) {
       try {
         const canvas = document.createElement('canvas');
@@ -6969,11 +7021,8 @@ a[href^="#/invoice/"]:hover, a[href^="#/customer/"]:hover {
   // ---------- SUBSCRIBE / RENEW MODAL ----------
   window.openSubscriptionModal = async function() {
     const amount = SUB.amount || 599;
-    const { qr, upi, name, error } = await buildOwnerUpiQr(
-      amount,
-      'Subscription renewal - ' + (SETTINGS.shop_name || 'Shop')
-    );
 
+    // Show modal first with loading state, then fill in QR
     openModal(`
       <div style="max-width:620px; margin:0 auto;">
         <h2 style="font-size:18px; font-weight:700; margin-bottom:4px;">Subscribe to Pro</h2>
@@ -6982,13 +7031,10 @@ a[href^="#/invoice/"]:hover, a[href^="#/customer/"]:hover {
         <div style="display:flex; gap:22px; align-items:flex-start; flex-wrap:wrap;">
           <div style="flex:0 0 230px; text-align:center;">
             <div style="background:#ffffff; padding:14px; border-radius:16px; display:inline-block; box-shadow: 0 8px 24px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.15);">
-              ${qr
-                ? `<img src="${qr}" style="width:200px; height:200px; display:block;">`
-                : `<div style="width:200px; height:200px; display:flex; flex-direction:column; align-items:center; justify-content:center; color:#b91c1c; font-size:11px; background:#fef2f2; border-radius:8px; padding:10px; text-align:center;">
-                     <div style="font-size:22px; margin-bottom:6px;">⚠</div>
-                     <div style="font-weight:600;">QR generation failed</div>
-                     <div style="font-size:9px; margin-top:6px; color:#7f1d1d; word-break:break-word;">${esc(error || 'Unknown error')}</div>
-                   </div>`}
+              <div id="sub-qr-container" style="width:200px; height:200px; display:flex; flex-direction:column; align-items:center; justify-content:center; color:#64748b; font-size:12px; background:#f8fafc; border-radius:8px;">
+                <div style="font-size:20px; margin-bottom:6px;">⏳</div>
+                <div>Generating QR...</div>
+              </div>
             </div>
             <div style="font-size:12px; font-weight:600; color:#86efac; margin-top:10px;">Scan to pay ₹${amount}</div>
             <div style="font-size:10px; color:#64748b; margin-top:2px;">GPay · PhonePe · Paytm · BHIM</div>
@@ -6997,11 +7043,11 @@ a[href^="#/invoice/"]:hover, a[href^="#/customer/"]:hover {
           <div style="flex:1; min-width:240px;">
             <div style="font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:1px; font-weight:700; margin-bottom:6px;">Or pay to this UPI ID</div>
             <div style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.10); border-radius:12px; padding:12px 14px; display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:14px;">
-              <code style="font-size:15px; color:#f4f4f5; font-weight:600; word-break:break-all; font-family:'Courier New',monospace;">${esc(upi)}</code>
+              <code style="font-size:15px; color:#f4f4f5; font-weight:600; word-break:break-all; font-family:'Courier New',monospace;">${esc(SUB_OWNER_UPI)}</code>
               <button id="sub-copy-upi" class="btn btn-ghost btn-sm" style="flex-shrink:0;">📋 Copy</button>
             </div>
             <div style="font-size:12px; color:#94a3b8; margin-bottom:14px;">
-              Receiver: <b style="color:#d4d4d8;">${esc(name)}</b>
+              Receiver: <b style="color:#d4d4d8;">${esc(SUB_OWNER_NAME)}</b>
             </div>
 
             <div style="font-size:12px; color:#a1a1aa; line-height:1.9; margin-bottom:16px; padding:12px; background:rgba(255,255,255,0.03); border-radius:10px; border-left:3px solid #22c55e;">
@@ -7018,16 +7064,30 @@ a[href^="#/invoice/"]:hover, a[href^="#/customer/"]:hover {
           </div>
         </div>
       </div>
-    `, root => {
+    `, async root => {
       const copyBtn = root.querySelector('#sub-copy-upi');
       if (copyBtn) copyBtn.onclick = async () => {
-        try { await navigator.clipboard.writeText(upi); toast('UPI ID copied', 'success'); }
-        catch(e) { prompt('Copy UPI ID:', upi); }
+        try { await navigator.clipboard.writeText(SUB_OWNER_UPI); toast('UPI ID copied', 'success'); }
+        catch(e) { prompt('Copy UPI ID:', SUB_OWNER_UPI); }
       };
       const waBtn = root.querySelector('#sub-wa-btn');
       if (waBtn) {
         waBtn.href = waLink(SUB_SUPPORT_WHATSAPP,
-          `Hi, I've paid ₹${amount} for the yearly subscription.\n\nShop: ${SETTINGS.shop_name || ''}\nUPI: ${upi}\nAmount: ₹${amount}\n\nPlease activate.`);
+          `Hi, I've paid ₹${amount} for the yearly subscription.\n\nShop: ${SETTINGS.shop_name || ''}\nUPI: ${SUB_OWNER_UPI}\nAmount: ₹${amount}\n\nPlease activate.`);
+      }
+
+      // Now generate QR and inject
+      const { qr, error } = await buildOwnerUpiQr(amount, 'Subscription renewal - ' + (SETTINGS.shop_name || 'Shop'));
+      const container = root.querySelector('#sub-qr-container');
+      if (!container) return;
+      if (qr) {
+        container.outerHTML = `<img id="sub-qr-container" src="${qr}" style="width:200px; height:200px; display:block;">`;
+      } else {
+        container.innerHTML = `
+          <div style="font-size:22px; margin-bottom:6px; color:#b91c1c;">⚠</div>
+          <div style="font-weight:600; color:#b91c1c;">QR generation failed</div>
+          <div style="font-size:9px; margin-top:6px; color:#7f1d1d; word-break:break-word; padding:0 8px;">${esc(error || 'Unknown error')}</div>
+        `;
       }
     });
   };
@@ -7071,10 +7131,6 @@ a[href^="#/invoice/"]:hover, a[href^="#/customer/"]:hover {
   window.openSubscriptionExpiredModal = async function() {
     const amount = SUB.amount || 599;
     const overdue = subDaysOverdue();
-    const { qr, upi, name, error } = await buildOwnerUpiQr(
-      amount,
-      'Subscription renewal - ' + (SETTINGS.shop_name || 'Shop')
-    );
 
     openModal(`
       <div style="max-width:640px; margin:0 auto;">
@@ -7087,13 +7143,10 @@ a[href^="#/invoice/"]:hover, a[href^="#/customer/"]:hover {
         <div style="display:flex; gap:22px; align-items:flex-start; flex-wrap:wrap; padding:18px; background:rgba(255,255,255,0.03); border-radius:16px; border:1px solid rgba(255,255,255,0.06);">
           <div style="flex:0 0 220px; text-align:center;">
             <div style="background:#ffffff; padding:14px; border-radius:16px; display:inline-block; box-shadow: 0 8px 24px rgba(0,0,0,0.35);">
-              ${qr
-                ? `<img src="${qr}" style="width:190px; height:190px; display:block;">`
-                : `<div style="width:190px; height:190px; display:flex; flex-direction:column; align-items:center; justify-content:center; color:#b91c1c; font-size:11px; background:#fef2f2; border-radius:8px; padding:10px; text-align:center;">
-                     <div style="font-size:22px; margin-bottom:6px;">⚠</div>
-                     <div style="font-weight:600;">QR failed</div>
-                     <div style="font-size:9px; margin-top:6px; color:#7f1d1d;">${esc(error || '')}</div>
-                   </div>`}
+              <div id="sub-exp-qr-container" style="width:190px; height:190px; display:flex; flex-direction:column; align-items:center; justify-content:center; color:#64748b; font-size:12px; background:#f8fafc; border-radius:8px;">
+                <div style="font-size:20px; margin-bottom:6px;">⏳</div>
+                <div>Generating QR...</div>
+              </div>
             </div>
             <div style="font-size:12px; font-weight:600; color:#86efac; margin-top:10px;">Scan to pay ₹${amount}</div>
           </div>
@@ -7106,11 +7159,11 @@ a[href^="#/invoice/"]:hover, a[href^="#/customer/"]:hover {
 
             <div style="font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:1px; font-weight:700; margin-bottom:6px;">UPI ID</div>
             <div style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.10); border-radius:12px; padding:12px 14px; display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:12px;">
-              <code style="font-size:14px; color:#f4f4f5; font-weight:600; word-break:break-all; font-family:'Courier New',monospace;">${esc(upi)}</code>
+              <code style="font-size:14px; color:#f4f4f5; font-weight:600; word-break:break-all; font-family:'Courier New',monospace;">${esc(SUB_OWNER_UPI)}</code>
               <button id="sub-exp-copy" class="btn btn-ghost btn-sm" style="flex-shrink:0;">📋 Copy</button>
             </div>
             <div style="font-size:12px; color:#94a3b8; margin-bottom:14px;">
-              Receiver: <b style="color:#d4d4d8;">${esc(name)}</b>
+              Receiver: <b style="color:#d4d4d8;">${esc(SUB_OWNER_NAME)}</b>
             </div>
 
             <div style="display:flex; gap:8px; flex-wrap:wrap;">
@@ -7126,16 +7179,30 @@ a[href^="#/invoice/"]:hover, a[href^="#/customer/"]:hover {
           <div style="font-size:11px; color:#64748b; margin-top:4px;">Your existing data is safe. It just won't update until you renew.</div>
         </div>
       </div>
-    `, root => {
+    `, async root => {
       const copyBtn = root.querySelector('#sub-exp-copy');
       if (copyBtn) copyBtn.onclick = async () => {
-        try { await navigator.clipboard.writeText(upi); toast('UPI ID copied', 'success'); }
-        catch(e) { prompt('Copy UPI ID:', upi); }
+        try { await navigator.clipboard.writeText(SUB_OWNER_UPI); toast('UPI ID copied', 'success'); }
+        catch(e) { prompt('Copy UPI ID:', SUB_OWNER_UPI); }
       };
       const waBtn = root.querySelector('#sub-exp-wa');
       if (waBtn) {
         waBtn.href = waLink(SUB_SUPPORT_WHATSAPP,
-          `Hi, I want to renew my yearly subscription (₹${amount}).\n\nShop: ${SETTINGS.shop_name || ''}\nUPI: ${upi}\n\nPlease let me know how to proceed.`);
+          `Hi, I want to renew my yearly subscription (₹${amount}).\n\nShop: ${SETTINGS.shop_name || ''}\nUPI: ${SUB_OWNER_UPI}\n\nPlease let me know how to proceed.`);
+      }
+
+      // Generate QR after modal is mounted
+      const { qr, error } = await buildOwnerUpiQr(amount, 'Subscription renewal - ' + (SETTINGS.shop_name || 'Shop'));
+      const container = root.querySelector('#sub-exp-qr-container');
+      if (!container) return;
+      if (qr) {
+        container.outerHTML = `<img id="sub-exp-qr-container" src="${qr}" style="width:190px; height:190px; display:block;">`;
+      } else {
+        container.innerHTML = `
+          <div style="font-size:22px; margin-bottom:6px; color:#b91c1c;">⚠</div>
+          <div style="font-weight:600; color:#b91c1c;">QR failed</div>
+          <div style="font-size:9px; margin-top:6px; color:#7f1d1d; padding:0 8px; word-break:break-word;">${esc(error || '')}</div>
+        `;
       }
     });
   };
