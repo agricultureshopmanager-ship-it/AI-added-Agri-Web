@@ -6804,12 +6804,12 @@ a[href^="#/invoice/"]:hover, a[href^="#/customer/"]:hover {
 </script>
    <script>
 /* ============================================================
-   MY SHOP SUBSCRIPTION CARD (C3) + EXPIRED POPUP (D2) + QR MODAL
+   MY SHOP SUBSCRIPTION CARD (Compact Square) + QR MODAL + EXPIRED POPUP
    ============================================================ */
 (function() {
   'use strict';
 
-  // ---------- MY SHOP CARD ----------
+  // ---------- COMPACT SQUARE CARD ----------
   function buildSubCardHTML() {
     const pct = subPercentLeft();
     const days = subDaysLeft();
@@ -6817,80 +6817,122 @@ a[href^="#/invoice/"]:hover, a[href^="#/customer/"]:hover {
     const status = subStatusLabel();
     const expired = isSubExpired();
     const overdue = subDaysOverdue();
+    const expiringSoon = isSubExpiringSoon();
 
     const expiresStr = SUB.expires_at ? fmtDate(SUB.expires_at) : '—';
     const lastPaidStr = SUB.last_paid_at ? fmtDate(SUB.last_paid_at) : 'First activation';
-    const circumference = 2 * Math.PI * 44;
+    const circumference = 2 * Math.PI * 32;
     const dash = (pct / 100) * circumference;
 
-    return `
-      <div class="card" style="margin-bottom:16px; padding:20px;">
-        <div style="display:flex; gap:24px; align-items:center; flex-wrap:wrap;">
+    // Decide button
+    let btnText, btnId;
+    if (expired) { btnText = 'Subscribe Now ₹' + (SUB.amount || 599); btnId = 'sub-main-btn'; }
+    else if (expiringSoon) { btnText = 'Renew Now ₹' + (SUB.amount || 599); btnId = 'sub-main-btn'; }
+    else { btnText = 'Manage Subscription'; btnId = 'sub-manage-btn'; }
 
-          <!-- Circular ring -->
-          <div style="position:relative; width:120px; height:120px; flex-shrink:0;">
-            <svg width="120" height="120" viewBox="0 0 120 120" style="transform: rotate(-90deg);">
-              <circle cx="60" cy="60" r="44" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="10"/>
-              <circle cx="60" cy="60" r="44" fill="none" stroke="${color}" stroke-width="10"
+    return `
+      <div class="card" id="sub-card-root" style="
+        margin-bottom:16px;
+        max-width:480px;
+        padding:20px;
+      ">
+        <!-- Top: ring + title -->
+        <div style="display:flex; gap:16px; align-items:center; margin-bottom:14px;">
+
+          <!-- Ring -->
+          <div style="position:relative; width:80px; height:80px; flex-shrink:0;">
+            <svg width="80" height="80" viewBox="0 0 80 80" style="transform: rotate(-90deg);">
+              <circle cx="40" cy="40" r="32" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="7"/>
+              <circle cx="40" cy="40" r="32" fill="none" stroke="${color}" stroke-width="7"
                 stroke-linecap="round"
                 stroke-dasharray="${circumference}"
                 stroke-dashoffset="${circumference - dash}"
-                style="transition: stroke-dashoffset 1s ease, stroke 0.3s ease; filter: drop-shadow(0 0 8px ${color}44);"/>
+                style="transition: stroke-dashoffset 1s ease, stroke 0.3s ease; filter: drop-shadow(0 0 6px ${color}44);"/>
             </svg>
             <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; flex-direction:column;">
-              <div style="font-size:22px; font-weight:800; color:${color}; line-height:1;">${pct}%</div>
-              <div style="font-size:9px; color:#94a3b8; margin-top:2px; letter-spacing:0.5px;">LEFT</div>
+              <div style="font-size:16px; font-weight:800; color:${color}; line-height:1;">${pct}%</div>
+              <div style="font-size:8px; color:#94a3b8; margin-top:1px; letter-spacing:0.5px;">LEFT</div>
             </div>
           </div>
 
-          <!-- Info -->
-          <div style="flex:1; min-width:220px;">
-            <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px; flex-wrap:wrap;">
-              <div style="font-size:16px; font-weight:700; color:#f4f4f5;">Yearly Subscription</div>
-              <span style="background:${color}22; color:${color}; font-size:10px; font-weight:700; padding:3px 10px; border-radius:999px; border:1px solid ${color}44; letter-spacing:0.5px;">
-                ● ${status.toUpperCase()}
-              </span>
-            </div>
-            <div style="font-size:14px; color:#a1a1aa; margin-bottom:10px;">
-              ₹${SUB.amount || 599} / year
-            </div>
-            <div style="font-size:12px; color:#94a3b8; line-height:1.7;">
-              <div>Expires on <b style="color:#d4d4d8;">${expiresStr}</b></div>
-              <div>${expired ? `<span style="color:#f87171; font-weight:600;">Overdue by ${overdue} day${overdue===1?'':'s'}</span>` : `<b style="color:${color};">${days} days</b> remaining`}</div>
-              <div>Last paid: <b style="color:#d4d4d8;">${lastPaidStr}</b></div>
-            </div>
-            <div style="display:flex; gap:8px; margin-top:14px; flex-wrap:wrap;">
-              <button id="sub-view-qr" class="btn btn-primary btn-sm">View QR</button>
-              <a id="sub-contact" target="_blank" class="btn btn-ghost btn-sm">Contact Support</a>
-            </div>
+          <!-- Title + status -->
+          <div style="flex:1; min-width:0;">
+            <div style="font-size:15px; font-weight:700; color:#f4f4f5; margin-bottom:6px;">Yearly Subscription</div>
+            <span style="display:inline-block; background:${color}22; color:${color}; font-size:10px; font-weight:700; padding:3px 10px; border-radius:999px; border:1px solid ${color}44; letter-spacing:0.5px;">
+              ● ${status.toUpperCase()}
+            </span>
           </div>
+        </div>
 
+        <!-- Middle: info lines -->
+        <div style="font-size:12px; color:#94a3b8; line-height:1.9; margin-bottom:14px; padding:10px 12px; background:rgba(255,255,255,0.03); border-radius:10px; border:1px solid rgba(255,255,255,0.05);">
+          <div style="display:flex; justify-content:space-between;">
+            <span>Plan</span>
+            <b style="color:#d4d4d8;">₹${SUB.amount || 599} / year</b>
+          </div>
+          <div style="display:flex; justify-content:space-between;">
+            <span>Expires</span>
+            <b style="color:#d4d4d8;">${expiresStr}</b>
+          </div>
+          <div style="display:flex; justify-content:space-between;">
+            <span>Remaining</span>
+            ${expired
+              ? `<b style="color:#f87171;">Overdue ${overdue}d</b>`
+              : `<b style="color:${color};">${days} days</b>`}
+          </div>
+          <div style="display:flex; justify-content:space-between;">
+            <span>Last paid</span>
+            <b style="color:#d4d4d8; font-size:11px;">${lastPaidStr}</b>
+          </div>
+        </div>
+
+        <!-- Bottom: button + support -->
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button id="${btnId}" class="btn btn-primary btn-sm" style="flex:1; justify-content:center; font-weight:600;">
+            ${btnText}
+          </button>
+          <a id="sub-support-link" target="_blank" class="btn btn-ghost btn-sm" style="justify-content:center;">
+            Support
+          </a>
         </div>
       </div>
     `;
   }
 
+  // ---------- WRAP renderMyShop ----------
   const _origRenderMyShop = window.renderMyShop;
   if (typeof _origRenderMyShop === 'function') {
     window.renderMyShop = function(content) {
       _origRenderMyShop.apply(this, arguments);
       try {
-        const card = document.createElement('div');
-        card.innerHTML = buildSubCardHTML();
-        content.insertBefore(card.firstElementChild, content.firstChild);
+        // Remove any existing sub card first (in case of re-render)
+        const oldCard = content.querySelector('#sub-card-root');
+        if (oldCard) oldCard.remove();
 
-        const qrBtn = content.querySelector('#sub-view-qr');
-        if (qrBtn) qrBtn.onclick = () => openSubscriptionModal();
+        const wrap = document.createElement('div');
+        wrap.innerHTML = buildSubCardHTML();
+        const card = wrap.firstElementChild;
+        content.insertBefore(card, content.firstChild);
 
-        const contactBtn = content.querySelector('#sub-contact');
-        if (contactBtn) {
-          contactBtn.href = waLink(SUB_SUPPORT_WHATSAPP, 'Hi, I need help with my subscription (₹599 yearly). My shop: ' + (SETTINGS.shop_name || ''));
+        // Bind main button
+        const mainBtn = card.querySelector('#sub-main-btn');
+        if (mainBtn) mainBtn.onclick = () => openSubscriptionModal();
+
+        // Manage button (active state) — show info panel
+        const mgBtn = card.querySelector('#sub-manage-btn');
+        if (mgBtn) mgBtn.onclick = () => openSubscriptionManageModal();
+
+        // Support link
+        const sLink = card.querySelector('#sub-support-link');
+        if (sLink) {
+          sLink.href = waLink(SUB_SUPPORT_WHATSAPP,
+            `Hi, I need help with my subscription.\nShop: ${SETTINGS.shop_name || ''}`);
         }
       } catch(e) { console.warn('sub card:', e); }
     };
   }
 
-  // ---------- QR MODAL (used by "View QR" and banner "Renew Now") ----------
+  // ---------- QR MODAL (for Subscribe / Renew) ----------
   window.openSubscriptionModal = async function() {
     const upi = SETTINGS.upi || '';
     const amount = SUB.amount || 599;
@@ -6906,9 +6948,9 @@ a[href^="#/invoice/"]:hover, a[href^="#/customer/"]:hover {
     } catch(e) { console.warn('QR gen failed:', e); }
 
     openModal(`
-      <div style="max-width:600px; margin:0 auto;">
-        <h2 style="font-size:18px; font-weight:700; margin-bottom:4px;">Renew Subscription</h2>
-        <p style="font-size:13px; color:#a1a1aa; margin-bottom:16px;">Pay ₹${amount} to keep saving data for another year.</p>
+      <div style="max-width:560px; margin:0 auto;">
+        <h2 style="font-size:18px; font-weight:700; margin-bottom:4px;">Subscribe to Pro</h2>
+        <p style="font-size:13px; color:#a1a1aa; margin-bottom:16px;">Pay ₹${amount} for 1 year of unlimited access.</p>
 
         <div style="display:flex; gap:20px; align-items:flex-start; flex-wrap:wrap;">
           <!-- QR -->
@@ -6930,7 +6972,7 @@ a[href^="#/invoice/"]:hover, a[href^="#/customer/"]:hover {
             <div style="font-size:12px; color:#a1a1aa; line-height:1.7; margin-bottom:14px;">
               <div>1. Pay ₹${amount} via UPI</div>
               <div>2. Send us the payment screenshot</div>
-              <div>3. We'll activate your subscription within a few hours</div>
+              <div>3. We'll activate within a few hours</div>
             </div>
 
             <div style="display:flex; gap:8px; flex-wrap:wrap;">
@@ -6943,20 +6985,54 @@ a[href^="#/invoice/"]:hover, a[href^="#/customer/"]:hover {
     `, root => {
       const copyBtn = root.querySelector('#sub-copy-upi');
       if (copyBtn) copyBtn.onclick = async () => {
-        try {
-          await navigator.clipboard.writeText(upi);
-          toast('UPI ID copied','success');
-        } catch(e) { prompt('Copy UPI ID:', upi); }
+        try { await navigator.clipboard.writeText(upi); toast('UPI ID copied','success'); }
+        catch(e) { prompt('Copy UPI ID:', upi); }
       };
       const waBtn = root.querySelector('#sub-wa-btn');
       if (waBtn) {
-        waBtn.href = waLink(SUB_SUPPORT_WHATSAPP, 
-          `Hi, I've paid ₹${amount} for the yearly subscription of ${SETTINGS.shop_name || 'my shop'}.\n\nUPI: ${upi}\nAmount: ₹${amount}\n\nPlease activate my subscription.`);
+        waBtn.href = waLink(SUB_SUPPORT_WHATSAPP,
+          `Hi, I've paid ₹${amount} for the yearly subscription.\n\nShop: ${SETTINGS.shop_name || ''}\nUPI: ${upi}\nAmount: ₹${amount}\n\nPlease activate.`);
       }
     });
   };
 
-  // ---------- EXPIRED POPUP (D2) ----------
+  // ---------- MANAGE MODAL (when active and far from expiry) ----------
+  window.openSubscriptionManageModal = function() {
+    const upi = SETTINGS.upi || '';
+    const expiresStr = SUB.expires_at ? fmtDate(SUB.expires_at) : '—';
+    const lastPaidStr = SUB.last_paid_at ? fmtDate(SUB.last_paid_at) : 'First activation';
+    const days = subDaysLeft();
+
+    openModal(`
+      <div style="max-width:480px; margin:0 auto;">
+        <h2 style="font-size:18px; font-weight:700; margin-bottom:4px;">Your Subscription</h2>
+        <p style="font-size:13px; color:#a1a1aa; margin-bottom:16px;">You're on the Pro plan.</p>
+
+        <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); border-radius:12px; padding:14px; font-size:13px; line-height:2; color:#a1a1aa;">
+          <div style="display:flex; justify-content:space-between;"><span>Status</span><b style="color:#4ade80;">● Active</b></div>
+          <div style="display:flex; justify-content:space-between;"><span>Plan</span><b style="color:#d4d4d8;">₹${SUB.amount || 599} / year</b></div>
+          <div style="display:flex; justify-content:space-between;"><span>Expires</span><b style="color:#d4d4d8;">${expiresStr}</b></div>
+          <div style="display:flex; justify-content:space-between;"><span>Days remaining</span><b style="color:#4ade80;">${days} days</b></div>
+          <div style="display:flex; justify-content:space-between;"><span>Last paid</span><b style="color:#d4d4d8;">${lastPaidStr}</b></div>
+        </div>
+
+        <div style="font-size:12px; color:#94a3b8; margin-top:14px; line-height:1.7;">
+          For renewal assistance, contact support on WhatsApp.
+        </div>
+
+        <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px; flex-wrap:wrap;">
+          <a id="sub-manage-wa" target="_blank" class="btn" style="background:#25D366; color:#fff;">💬 Contact Support</a>
+          <button class="btn btn-ghost" onclick="closeModal()">Close</button>
+        </div>
+      </div>
+    `, root => {
+      const wa = root.querySelector('#sub-manage-wa');
+      if (wa) wa.href = waLink(SUB_SUPPORT_WHATSAPP,
+        `Hi, I want to renew my subscription early.\nShop: ${SETTINGS.shop_name || ''}`);
+    });
+  };
+
+  // ---------- EXPIRED POPUP ----------
   window.openSubscriptionExpiredModal = async function() {
     const upi = SETTINGS.upi || '';
     const amount = SUB.amount || 599;
@@ -6973,7 +7049,7 @@ a[href^="#/invoice/"]:hover, a[href^="#/customer/"]:hover {
     } catch(e) { console.warn('QR gen failed:', e); }
 
     openModal(`
-      <div style="max-width:640px; margin:0 auto;">
+      <div style="max-width:600px; margin:0 auto;">
         <div style="text-align:center; margin-bottom:16px;">
           <div style="font-size:32px; margin-bottom:6px;">⚠</div>
           <h2 style="font-size:20px; font-weight:700; color:#f87171;">Subscription Expired</h2>
@@ -7009,23 +7085,18 @@ a[href^="#/invoice/"]:hover, a[href^="#/customer/"]:hover {
           </div>
         </div>
 
-        <!-- Footer: overdue + contact -->
+        <!-- Footer: overdue + email only -->
         <div style="margin-top:16px; padding-top:14px; border-top:1px solid rgba(255,255,255,0.06); text-align:center; font-size:12px; color:#94a3b8; line-height:1.9;">
           <div style="color:#f87171; font-weight:600; margin-bottom:4px;">⚠ Overdue by ${overdue} day${overdue===1?'':'s'}</div>
-          <div>📞 <a href="tel:${esc(SUB_SUPPORT_WHATSAPP)}" style="color:#86efac;">${esc(SUB_SUPPORT_WHATSAPP)}</a>
-             &nbsp;·&nbsp;
-             ✉ <a href="mailto:${esc(SUB_SUPPORT_EMAIL)}" style="color:#86efac;">${esc(SUB_SUPPORT_EMAIL)}</a>
-          </div>
+          <div>✉ <a href="mailto:${esc(SUB_SUPPORT_EMAIL)}" style="color:#86efac;">${esc(SUB_SUPPORT_EMAIL)}</a></div>
           <div style="font-size:11px; color:#64748b; margin-top:4px;">Your existing data is safe. It just won't update until you renew.</div>
         </div>
       </div>
     `, root => {
       const copyBtn = root.querySelector('#sub-exp-copy');
       if (copyBtn) copyBtn.onclick = async () => {
-        try {
-          await navigator.clipboard.writeText(upi);
-          toast('UPI ID copied','success');
-        } catch(e) { prompt('Copy UPI ID:', upi); }
+        try { await navigator.clipboard.writeText(upi); toast('UPI ID copied','success'); }
+        catch(e) { prompt('Copy UPI ID:', upi); }
       };
       const waBtn = root.querySelector('#sub-exp-wa');
       if (waBtn) {
@@ -7035,8 +7106,7 @@ a[href^="#/invoice/"]:hover, a[href^="#/customer/"]:hover {
     });
   };
 
-  // ---------- SAVE GUARD WRAPPER ----------
-  // Guard specific functions that trigger saves.
+  // ---------- SAVE GUARD WRAPPERS ----------
   const guardedFns = [
     'openCustomerFormModal',
     'openProductForm',
@@ -7056,29 +7126,36 @@ a[href^="#/invoice/"]:hover, a[href^="#/customer/"]:hover {
     };
   });
 
-  // Guard payments / returns / delete actions at click level
+  // Click-level guard for buttons that bypass the form-open guards
   document.addEventListener('click', function(e) {
     const t = e.target.closest('button, a');
     if (!t) return;
-    const isSaveAction = 
+
+    // Skip the renew/subscribe buttons themselves
+    if (t.id === 'sub-main-btn' || t.id === 'sub-manage-btn' ||
+        t.id === 'sub-banner-renew' || t.id === 'sub-view-qr') return;
+
+    const isSaveAction =
       t.id === 'btn-pay' ||
       t.id === 'btn-old-due' ||
       t.id === 'rt-submit' ||
       t.id === 'btn-export' ||
-      t.id === 'sub-banner-renew' ||
-      (t.dataset && (t.dataset.del !== undefined || t.dataset.delInv !== undefined || t.dataset.payDel !== undefined || t.dataset.delPur !== undefined || t.dataset.delRet !== undefined || t.dataset.delExp !== undefined)) ||
+      (t.dataset && (t.dataset.del !== undefined
+        || t.dataset.delInv !== undefined
+        || t.dataset.payDel !== undefined
+        || t.dataset.delPur !== undefined
+        || t.dataset.delRet !== undefined
+        || t.dataset.delExp !== undefined)) ||
       /^\+ (Payment|Purchase|Add Bill|Add Expense|Add Customer|Add Product|Add Supplier)/i.test(t.textContent || '');
 
     if (!isSaveAction) return;
     if (isSubActive()) return;
 
-    // Block
     e.preventDefault();
     e.stopPropagation();
     openSubscriptionExpiredModal();
   }, true);
 })();
 </script>
-   
 </body>
 </html>
